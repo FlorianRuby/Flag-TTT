@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Flag Tac Toe</title>
+    <link rel="stylesheet" href="styles.css">
+
+  </head>
+  <body>
+    <div class="logo">
+      <a href="javascript:showStartScreen()">🎯 FlagTacToe</a>
+    </div>
+    
+    <div class="container">
+      <!-- Start Screen -->
+      <div id="start-screen">
+        <div class="settings">
+          <div class="setting-group">
+            <label for="start-difficulty">Difficulty:</label>
+            <select id="start-difficulty">
+              <option value="all">All</option>
+              <option value="easy">Easy</option>
+              <option value="medium">Medium</option>
+              <option value="hard">Hard</option>
+            </select>
+          </div>
+          
+          <div class="setting-group">
+            <label for="continent">Continent:</label>
+            <select id="continent">
+              <option value="all">World</option>
+              <option value="Europe">Europe</option>
+              <option value="North America">North America</option>
+              <option value="South America">South America</option>
+              <option value="Africa">Africa</option>
+              <option value="Asia">Asia</option>
+              <option value="Oceania">Oceania</option>
+            </select>
+          </div>
+          
+          <div class="game-buttons">
+            <button onclick="startSinglePlayerGame()" class="start-button">Start Game</button>
+            <button onclick="startDailyChallenge()" class="daily-button">Daily Challenge</button>
+            <button onclick="createMultiplayerGame()" class="multiplayer-button">Create Multiplayer Game</button>
+          </div>
+
+          <div class="join-game-section">
+            <h3>Join Existing Game</h3>
+            <div class="join-game">
+              <input type="text" id="game-code" placeholder="Enter game code">
+              <button onclick="joinMultiplayerGame()" class="join-button">Join Game</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Game Screen (initially hidden) -->
+      <div id="game-screen" style="display: none;">
+        <div class="controls">
+          <select id="difficulty">
+            <option value="all">All</option>
+            <option value="easy">Easy</option>
+            <option value="medium">Medium</option>
+            <option value="hard">Hard</option>
+          </select>
+          <button onclick="startNewGame()">New Game</button>
+          <div id="game-code-display" class="game-code-display"></div>
+          <div id="remaining-guesses" class="guesses-display"></div>
+        </div>
+        <div class="grid" id="grid"></div>
+        <div class="input-group">
+          <div class="autocomplete-container">
+            <input
+              type="text"
+              id="guess"
+              placeholder="Enter country name"
+            />
+            <div id="country-suggestions"></div>
+          </div>
+          <button onclick="checkGuess()">Submit</button>
+        </div>
+        <div id="message"></div>
+      </div>
+    </div>
+
+    <script src="countries.js"></script>
+    <script src="http://localhost:3000/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+  </body>
+</html>
