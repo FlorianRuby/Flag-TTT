@@ -493,7 +493,12 @@ function showStartScreen() {
 function initializeSocket() {
   try {
     console.log('Initializing socket connection...');
-    socket = io('http://localhost:3000', {
+    // Replace the hardcoded localhost URL with dynamic origin
+    const socketUrl = window.location.hostname === 'localhost' 
+      ? 'http://localhost:3000'
+      : window.location.origin;
+    
+    socket = io(socketUrl, {
       transports: ['websocket'],
       upgrade: false
     });
