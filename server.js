@@ -47,7 +47,8 @@ io.on('connection', (socket) => {
         currentTurn: 0,
         board: Array(9).fill(null),
         gameState: [],
-        gameBoard: gameBoard // Store the generated board
+        gameBoard: gameBoard, // Store the generated board
+        creator: socket.id    // Add creator tracking
       };
       
       games.set(gameCode, game);
@@ -56,7 +57,8 @@ io.on('connection', (socket) => {
       socket.emit('game-created', gameCode);
       socket.emit('game-start', {
         ...game,
-        players: game.activePlayers
+        players: game.activePlayers,
+        isCreator: true      // Tell the creator they're the creator
       });
       
       console.log('Game code sent to creator');
@@ -115,21 +117,44 @@ io.on('connection', (socket) => {
     const playerIndex = game.activePlayers.indexOf(socket.id);
     if (playerIndex !== game.currentTurn) return;
 
+    // Update the game board state
+    if (correct) {
+      game.board[cell] = playerIndex + 1;
+    }
+
+    // Check for win or draw
+    const hasWon = checkWin(game.board, playerIndex + 1);
+    const isDraw = game.board.every(cell => cell !== null && cell !== undefined);
+
     // Handle move logic here
     io.to(code).emit('move-made', {
       player: playerIndex,
       cell,
       guess,
-      correct
+      correct,
+      board: game.board,
+      playerNumber: playerIndex + 1,
+      nextTurn: (playerIndex + 1) % 2,
+      hasWon: hasWon,
+      isDraw: isDraw,
+      gameOver: hasWon || isDraw
     });
 
-    // Switch turns
-    game.currentTurn = (game.currentTurn + 1) % 2;
+    // Only switch turns if game isn't over
+    if (!hasWon && !isDraw) {
+      game.currentTurn = (game.currentTurn + 1) % 2;
+    }
   });
 
   socket.on('request-new-game', (code) => {
     const game = games.get(code);
     if (!game) return;
+
+    // Only allow the creator to start a new game
+    if (game.creator !== socket.id) {
+      socket.emit('error', 'Only the game creator can start a new game');
+      return;
+    }
 
     // Generate new game board with same settings
     const newGameBoard = generateGameBoard(game.settings);
@@ -279,6 +304,18 @@ function seedRandom(seed) {
         hash = Math.sin(hash) * 10000;
         return hash - Math.floor(hash);
     };
+}
+
+function checkWin(board, player) {
+  const winPatterns = [
+    [0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
+    [0, 3, 6], [1, 4, 7], [2, 5, 8], // Columns
+    [0, 4, 8], [2, 4, 6] // Diagonals
+  ];
+
+  return winPatterns.some(pattern => 
+    pattern.every(index => board[index] === player)
+  );
 }
 
 const PORT = process.env.PORT || 3000;

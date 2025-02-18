@@ -1,9 +1,31 @@
 :root {
-    --primary-color: #4a90e2;
-    --success-color: #50c878;
-    --error-color: #ff4757;
-    --background: #f5f7fb;
-    --text-color: #2d3436;
+    /* Light mode variables */
+    --primary-color: #3b82f6;
+    --success-color: #22c55e;
+    --error-color: #ef4444;
+    --background: #f8fafc;
+    --text-color: #1e293b;
+    --container-bg: #ffffff;
+    --cell-border: #e2e8f0;
+    --input-bg: #ffffff;
+    --input-border: #e2e8f0;
+    --button-hover: #2563eb;
+    --shadow-color: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] {
+    /* Dark mode variables */
+    --primary-color: #60a5fa;
+    --success-color: #4ade80;
+    --error-color: #f87171;
+    --background: #0f172a;
+    --text-color: #e2e8f0;
+    --container-bg: #1e293b;
+    --cell-border: #334155;
+    --input-bg: #1e293b;
+    --input-border: #334155;
+    --button-hover: #3b82f6;
+    --shadow-color: rgba(0, 0, 0, 0.3);
 }
 
 * {
@@ -24,12 +46,13 @@ body {
 .container {
     max-width: 800px;
     margin: 0 auto;
-    background: #fafafa;
+    background: var(--container-bg);
     padding: 2rem;
     border-radius: 1rem;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 10px 30px var(--shadow-color);
     margin-bottom: 2rem;
     position: relative;
+    transition: all 0.3s ease;
 }
 
 .logo {
@@ -85,8 +108,8 @@ button {
 }
 
 button:hover {
-    opacity: 0.9;
-    transform: translateY(-1px);
+    background: var(--button-hover);
+    transform: translateY(-2px);
 }
 
 .grid {
@@ -102,10 +125,10 @@ button:hover {
     aspect-ratio: 4/3;
     background-size: 90%;
     background-repeat: no-repeat;
-    background-color: transparent;
+    background-color: var(--container-bg);
     background-position: center;
     border-radius: 0.5rem;
-    border: 3px solid #e0e0e0;
+    border: 3px solid var(--cell-border);
     cursor: pointer;
     transition: all 0.3s ease;
 }
@@ -216,12 +239,13 @@ button:hover {
 #guess {
     width: 100%;
     padding: 1rem;
-    border: 2px solid #e0e0e0;
+    border: 2px solid var(--input-border);
     border-radius: 0.5rem;
     font-size: 1rem;
     position: relative;
     z-index: 1000;
-    background: #fafafa;
+    background: var(--input-bg);
+    color: var(--text-color);
 }
 
 #guess:focus {
@@ -234,8 +258,8 @@ button:hover {
     top: calc(100% - 5px);
     left: 0;
     right: 0;
-    background: #fafafa;
-    border: 2px solid #e0e0e0;
+    background: var(--input-bg);
+    border: 2px solid var(--input-border);
     border-radius: 0 0 0.5rem 0.5rem;
     max-height: 250px;
     overflow-y: auto;
@@ -249,7 +273,7 @@ button:hover {
     cursor: pointer;
     color: var(--text-color);
     transition: background 0.2s ease;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--cell-border);
 }
 
 .autocomplete-item:last-child {
@@ -262,10 +286,12 @@ button:hover {
 
 #message {
     text-align: center;
-    padding: 1rem;
-    margin: 1rem 0;
+    padding: 0.5rem;
+    margin: 0.5rem 0;
     border-radius: 0.5rem;
     font-weight: bold;
+    min-height: 2rem;
+    line-height: 1;
 }
 
 @media (max-width: 600px) {
@@ -506,4 +532,125 @@ button:hover {
 .daily-button:active {
     transform: translateY(0);
     box-shadow: none;
+}
+
+.cell.correct.player1-correct {
+  border: 3px solid #3498db; /* Blue for player 1 */
+}
+
+.cell.correct.player2-correct {
+  border: 3px solid #e74c3c; /* Red for player 2 */
+}
+
+.play-again-button {
+  background: var(--success-color);
+  color: white;
+  padding: 0.8rem 1.5rem;
+  border: none;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 1rem;
+}
+
+.play-again-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.play-again-button:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+/* Replace the theme switch styles with these */
+.theme-switch-wrapper {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+}
+
+.theme-switch {
+    display: inline-block;
+    cursor: pointer;
+}
+
+.theme-switch input {
+    display: none;
+}
+
+.slider {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: transparent;
+    border: 2px solid var(--text-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.slider .moon,
+.slider .sun {
+    position: absolute;
+    color: var(--text-color);
+    font-size: 20px;
+    transition: opacity 0.3s ease;
+}
+
+.slider .moon {
+    opacity: 0;
+}
+
+.slider .sun {
+    opacity: 1;
+}
+
+/* When in dark mode */
+input:checked + .slider .moon {
+    opacity: 1;
+}
+
+input:checked + .slider .sun {
+    opacity: 0;
+}
+
+.slider:hover {
+    transform: scale(1.1);
+}
+
+/* Update input styles */
+input, select {
+    background: var(--input-bg);
+    border: 1px solid var(--input-border);
+    color: var(--text-color);
+    transition: all 0.3s ease;
+}
+
+input:focus, select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+/* Update button styles */
+button {
+    transition: all 0.3s ease;
+}
+
+button:hover {
+    background: var(--button-hover);
+    transform: translateY(-2px);
+}
+
+#guess-result {
+  text-align: center;
+  padding: 0.15rem;
+  margin-top: 0.15rem;
+  font-weight: bold;
+  font-size: 0.8rem;
+  min-height: 1.2rem;
+  line-height: 1;
 }

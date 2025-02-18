@@ -17,6 +17,8 @@ let dailyStats = {
     lastPlayed: null,
     completed: false
 };
+let isCreator = false;
+let isLocalMultiplayer = false;
 
 const countryAliases = {
   'uk': 'United Kingdom',
@@ -198,6 +200,12 @@ function startNewGame() {
     const guessesDisplay = document.getElementById('remaining-guesses');
     guessesDisplay.classList.remove('active');
   }
+  
+  // Clear any existing guess result message
+  const guessResultEl = document.getElementById("guess-result");
+  if (guessResultEl) {
+    guessResultEl.textContent = "";
+  }
 }
 
 function selectCell(cell) {
@@ -226,6 +234,12 @@ function checkGuess() {
     return;
   }
 
+  // Handle online multiplayer turn check
+  if (isMultiplayerGame && currentTurn !== myPlayerNumber) {
+    showMessage("It's not your turn!", "red");
+    return;
+  }
+
   const guess = document.getElementById("guess").value.trim().toLowerCase();
   if (!guess) {
     showMessage("Please enter a guess!", "red");
@@ -236,36 +250,60 @@ function checkGuess() {
   const isCorrect = guess === expectedName || 
                    (countryAliases[guess] && countryAliases[guess].toLowerCase() === expectedName);
 
-  if (isDailyChallenge) {
-    remainingDailyGuesses--;
-    document.getElementById('remaining-guesses').textContent = `Remaining Guesses: ${remainingDailyGuesses}`;
+  // Handle online multiplayer move
+  if (isMultiplayerGame) {
+    socket.emit('make-move', {
+      code: gameCode,
+      cell: parseInt(activeCell.dataset.index),
+      guess: guess,
+      player: myPlayerNumber,
+      correct: isCorrect
+    });
   }
 
   if (isCorrect) {
     activeCell.classList.add('correct');
+    showMessage(`Correct! The country was ${activeCell.dataset.name}`, "green", true);
+    
+    // Handle multiplayer styling
+    if (isMultiplayerGame) {
+      activeCell.classList.add(`player${myPlayerNumber}-correct`);
+    } else if (isLocalMultiplayer) {
+      activeCell.classList.add(`player${currentPlayer}-correct`);
+    }
+    
     correctAnswers++;
     
     if (correctAnswers === 9) {
-      if (isDailyChallenge) {
-        dailyStats.completed = true;
-        localStorage.setItem('dailyStats', JSON.stringify(dailyStats));
-        showMessage(`Congratulations! You've completed today's challenge with ${remainingDailyGuesses} guesses remaining!`, "green");
+      if (isLocalMultiplayer) {
+        const winner = countPlayerCells();
+        if (winner.player1 > winner.player2) {
+          showMessage("Player 1 wins!", "blue");
+        } else if (winner.player2 > winner.player1) {
+          showMessage("Player 2 wins!", "red");
+        } else {
+          showMessage("It's a draw!", "green");
+        }
       } else {
         showMessage("Congratulations! You've won!", "green");
       }
       disableGame();
+      return;
     }
   } else {
-    showMessage("Wrong guess!", "red");
-    if (isDailyChallenge && remainingDailyGuesses <= 0) {
-      showMessage("Game Over! You've run out of guesses.", "red");
-      disableGame();
-    }
+    showMessage(`Incorrect! Try again. You guessed: ${guess}`, "red", true);
   }
 
+  // Clear input and reset cell state
   document.getElementById("guess").value = "";
   activeCell.classList.remove("active");
   activeCell = null;
+
+  // Switch turns in local multiplayer
+  if (isLocalMultiplayer && isCorrect) {
+    currentPlayer = currentPlayer === 1 ? 2 : 1;
+    updateTurnMessage();
+  }
 }
 
 function checkWin(player) {
@@ -288,7 +326,20 @@ function disableGame() {
       cell.style.opacity = '0.5';
     }
   });
-  document.getElementById("guess").disabled = true;
+  
+  const guessInput = document.getElementById("guess");
+  guessInput.disabled = true;
+  
+  // Only show play again button for the creator
+  if (isMultiplayerGame && isCreator) {
+    const playAgainButton = document.createElement('button');
+    playAgainButton.textContent = 'Play Again';
+    playAgainButton.className = 'play-again-button';
+    playAgainButton.onclick = () => socket.emit('request-new-game', gameCode);
+    document.querySelector('.controls').appendChild(playAgainButton);
+  } else if (isMultiplayerGame) {
+    showMessage("Waiting for game creator to start a new game...", "blue");
+  }
 }
 
 function updateTurnMessage() {
@@ -301,15 +352,39 @@ function updateTurnMessage() {
       showMessage("Opponent's turn...", '#808080');
       document.getElementById("guess").disabled = true;
     }
+  } else if (isLocalMultiplayer) {
+    showMessage(`Player ${currentPlayer}'s turn`, currentPlayer === 1 ? '#4a90e2' : '#e24a4a');
+    document.getElementById("guess").disabled = false;
   } else {
     showMessage(`Player ${currentPlayer}'s turn`, currentPlayer === 1 ? '#4a90e2' : '#e24a4a');
   }
 }
 
-function showMessage(text, color) {
+function showMessage(text, color, isGuessResult = false) {
   const messageEl = document.getElementById("message");
-  messageEl.textContent = text;
-  messageEl.style.color = color;
+  
+  if (isMultiplayerGame) {
+    // In multiplayer, show turn status and guess results separately
+    if (isGuessResult) {
+      // Create or update guess result message
+      let guessResultEl = document.getElementById("guess-result");
+      if (!guessResultEl) {
+        guessResultEl = document.createElement("div");
+        guessResultEl.id = "guess-result";
+        messageEl.parentNode.insertBefore(guessResultEl, messageEl.nextSibling);
+      }
+      guessResultEl.textContent = text;
+      guessResultEl.style.color = color;
+    } else {
+      // Update turn status message
+      messageEl.textContent = text;
+      messageEl.style.color = color;
+    }
+  } else {
+    // In single player, just show one message
+    messageEl.textContent = text;
+    messageEl.style.color = color;
+  }
 }
 
 // Event Listeners
@@ -320,6 +395,30 @@ document.getElementById("guess").addEventListener("input", function (e) {
 document.addEventListener("click", function (e) {
   if (!e.target.closest(".autocomplete-container")) {
     document.getElementById("country-suggestions").style.display = "none";
+  }
+});
+
+// Update the keydown event listener
+document.getElementById('guess').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    const suggestionsContainer = document.getElementById('country-suggestions');
+    
+    // If suggestions are visible, autocomplete with first suggestion
+    if (suggestionsContainer.style.display === 'block') {
+      const firstSuggestion = suggestionsContainer.querySelector('.autocomplete-item');
+      if (firstSuggestion) {
+        e.preventDefault(); // Prevent form submission
+        document.getElementById('guess').value = firstSuggestion.textContent;
+        suggestionsContainer.style.display = 'none';
+        return;
+      }
+    }
+    
+    // If no suggestions are visible and we have a value, submit the guess
+    if (document.getElementById('guess').value.trim()) {
+      e.preventDefault();
+      checkGuess();
+    }
   }
 });
 
@@ -341,6 +440,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
     initializeSocket();
     initializeDailyStats();
+
+    // Initialize theme
+    const savedTheme = localStorage.getItem('theme') || 
+                      (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    setTheme(savedTheme);
+
+    // Add theme switch event listener
+    document.getElementById('checkbox').addEventListener('change', toggleTheme);
 });
 
 // Add this function to handle opacity changes
@@ -379,6 +486,8 @@ function showStartScreen() {
   
   // Reset input field
   document.getElementById('game-code').value = '';
+
+  isLocalMultiplayer = false;
 }
 
 function initializeSocket() {
@@ -421,6 +530,7 @@ function initializeSocket() {
       gameCode = game.code;
       selectedDifficulty = game.settings.difficulty;
       selectedContinent = game.settings.continent;
+      isCreator = game.isCreator;
       
       // Set player number based on socket ID
       myPlayerNumber = game.players.indexOf(socket.id) + 1;
@@ -453,49 +563,47 @@ function initializeSocket() {
       // Initialize autocomplete with game settings
       updateAutocompleteSuggestions();
       
-      showMessage(`You are Player ${myPlayerNumber}`, myPlayerNumber === 1 ? '#4a90e2' : '#e24a4a');
+      // Show play again button only for creator
+      if (isCreator) {
+        showMessage(`You are Player ${myPlayerNumber} (Game Creator)`, myPlayerNumber === 1 ? '#4a90e2' : '#e24a4a');
+      } else {
+        showMessage(`You are Player ${myPlayerNumber}`, myPlayerNumber === 1 ? '#4a90e2' : '#e24a4a');
+      }
 
       // Update turn message and input state
       updateTurnMessage();
     });
 
-    socket.on('move-made', (move) => {
-      const cells = document.querySelectorAll('.cell');
-      const cell = cells[move.cell];
+    socket.on('move-made', (moveData) => {
+      const { cell, correct, playerNumber, nextTurn, hasWon, isDraw, gameOver } = moveData;
+      const cellElement = document.querySelector(`[data-index="${cell}"]`);
       
-      if (move.correct) {
-        // If it's our move
-        if (move.player === myPlayerNumber - 1) {
-          cell.classList.add(`player${myPlayerNumber}`);
-          gameBoard[move.cell] = myPlayerNumber;
-        } 
-        // If it's opponent's move
-        else {
-          const opponentPlayer = myPlayerNumber === 1 ? 2 : 1;
-          cell.classList.add(`player${opponentPlayer}`);
-          gameBoard[move.cell] = opponentPlayer;
-        }
+      if (correct && cellElement) {
+        cellElement.classList.add('correct');
+        cellElement.classList.add(`player${playerNumber}-correct`);
       }
       
-      // Always update both currentPlayer and currentTurn
-      currentPlayer = currentTurn === 1 ? 2 : 1;
-      currentTurn = currentTurn === 1 ? 2 : 1;
-      updateTurnMessage();
-
-      if (move.correct) {
-        // Check for win after move is made
-        const winningPlayer = move.player + 1;
-        if (checkWin(winningPlayer)) {
-          const winMessage = winningPlayer === myPlayerNumber ? 
-            "You win!" : "Opponent wins!";
-          showMessage(winMessage, "gold");
-          disableGame();
-        }
-        // Check for draw
-        else if (gameBoard.every(cell => cell !== null)) {
-          showMessage("It's a draw!", "blue");
-          disableGame();
-        }
+      // Handle game over states
+      if (hasWon) {
+        const isWinner = playerNumber === myPlayerNumber;
+        showMessage(
+          isWinner ? "Congratulations! You've won!" : "Game Over - Your opponent won!", 
+          isWinner ? "green" : "red"
+        );
+        disableGame();
+        return;
+      }
+      
+      if (isDraw) {
+        showMessage("Game Over - It's a draw!", "blue");
+        disableGame();
+        return;
+      }
+      
+      // Only update turn if game isn't over
+      if (!gameOver) {
+        currentTurn = nextTurn + 1; // Convert from 0-based to 1-based
+        updateTurnIndicator();
       }
     });
 
@@ -506,6 +614,13 @@ function initializeSocket() {
 
     socket.on('error', (message) => {
       showMessage(message, 'red');
+      if (message === 'Only the game creator can start a new game') {
+        // Remove the play again button if it exists
+        const playAgainButton = document.querySelector('.play-again-button');
+        if (playAgainButton) {
+          playAgainButton.remove();
+        }
+      }
     });
 
     // Add new handler for game-join-error
@@ -752,3 +867,74 @@ function startDailyChallenge() {
 
 // Add this to make the daily challenge button work globally
 window.startDailyChallenge = startDailyChallenge;
+
+// Add this helper function to update the turn indicator
+function updateTurnIndicator() {
+  if (!isMultiplayerGame) return;
+  
+  const isMyTurn = currentTurn === myPlayerNumber;
+  const guessInput = document.getElementById("guess");
+  
+  if (isMyTurn) {
+    showMessage("Your turn!", "green");
+    guessInput.disabled = false;
+    guessInput.focus();
+  } else {
+    showMessage("Opponent's turn", "blue");
+    guessInput.disabled = true;
+  }
+}
+
+// Update the theme functions
+function setTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+    
+    // Update checkbox state
+    const checkbox = document.getElementById('checkbox');
+    checkbox.checked = theme === 'dark';
+}
+
+function toggleTheme() {
+    const currentTheme = localStorage.getItem('theme') || 'light';
+    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+}
+
+function startLocalMultiplayer() {
+    isLocalMultiplayer = true;
+    isMultiplayerGame = false; // Ensure online multiplayer is off
+    isDailyChallenge = false;
+    currentPlayer = 1;
+    correctAnswers = 0;
+    
+    // Hide start screen and show game screen
+    document.getElementById('start-screen').style.display = 'none';
+    document.getElementById('game-screen').style.display = 'block';
+    
+    // Show difficulty selector
+    document.getElementById('difficulty').style.display = 'block';
+    document.getElementById('remaining-guesses').classList.remove('active');
+    
+    // Update difficulty dropdown to match selected difficulty
+    if (selectedDifficulty !== 'all') {
+        document.getElementById('difficulty').value = selectedDifficulty;
+    }
+    
+    startNewGame();
+    updateTurnMessage();
+}
+
+// Add helper function to count cells for each player
+function countPlayerCells() {
+    const cells = document.querySelectorAll('.cell');
+    let player1 = 0;
+    let player2 = 0;
+    
+    cells.forEach(cell => {
+        if (cell.classList.contains('player1-correct')) player1++;
+        if (cell.classList.contains('player2-correct')) player2++;
+    });
+    
+    return { player1, player2 };
+}
